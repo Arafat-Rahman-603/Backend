@@ -23,8 +23,8 @@ if (!MONGODB_URI) {
 app.use(helmet());
 app.use(cors({
   origin: [
-    'http://localhost:5174',      // your React dev
-    'https://your-production-url' // production frontend
+    'http://localhost:62',      // your React dev
+    'https://chatterly-puce.vercel.app' // production frontend
   ],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
