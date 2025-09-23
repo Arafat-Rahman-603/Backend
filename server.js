@@ -77,8 +77,8 @@ app.post('/messages', async (req, res) => {
 const io = new Server(server, {
   cors: {
     origin: [
-      'http://localhost:5174',
-      'https://your-production-url'
+      'http://localhost:62',
+      'https:https://chatterly-puce.vercel.app'
     ],
     methods: ['GET', 'POST'],
     allowedHeaders: ['Authorization'],
