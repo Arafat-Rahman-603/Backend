@@ -11,35 +11,37 @@ const Message = require('./models/Message');
 const app = express();
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-  console.error('ERROR: MONGODB_URI not set. Set it in .env or your host provider (Render).');
+  console.error('ERROR: MONGODB_URI not set in .env');
   process.exit(1);
 }
 
-// Middlewares
+// --- Middlewares ---
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || '*', // change to your client origin in production
+  origin: [
+    'http://localhost:5174',      // your React dev
+    'https://your-production-url' // production frontend
+  ],
   methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
 
-// Connect to MongoDB
+// --- MongoDB connection ---
 mongoose.set('strictQuery', false);
-mongoose.connect(MONGODB_URI, {
-  // options are inferred by mongoose 7+, keep minimal
-})
+mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => {
     console.error('MongoDB connection error:', err);
     process.exit(1);
   });
 
-// Basic REST endpoints
-// Get last 100 messages (most recent last)
+// --- REST endpoints ---
+// Get last 100 messages
 app.get('/messages', async (req, res) => {
   try {
     const msgs = await Message.find({})
@@ -52,15 +54,18 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// Post a message (optional — Socket.IO will usually handle sending)
+// Post a new message
 app.post('/messages', async (req, res) => {
   const { user = 'Anonymous', text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
+
   try {
     const message = new Message({ user, text: text.trim() });
     await message.save();
-    // emit via io if needed (we will set io below)
+
+    // Emit via Socket.IO
     io && io.emit('new_message', message);
+
     res.status(201).json(message);
   } catch (err) {
     console.error(err);
@@ -68,36 +73,37 @@ app.post('/messages', async (req, res) => {
   }
 });
 
-// Start Socket.IO
+// --- Socket.IO setup ---
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || '*',
+    origin: [
+      'http://localhost:5174',
+      'https://your-production-url'
+    ],
     methods: ['GET', 'POST'],
+    allowedHeaders: ['Authorization'],
   },
 });
 
 io.on('connection', (socket) => {
   console.log('🔌 Client connected:', socket.id);
 
-  // Client asks to join global room (optional)
   socket.on('join_global', () => {
     socket.join('global');
   });
 
-  // When a client sends a message
   socket.on('send_message', async (payload) => {
-    // payload: { user, text }
     try {
-      if (!payload || !payload.text || !payload.text.trim()) return;
+      if (!payload?.text?.trim()) return;
+
       const msg = new Message({
         user: payload.user || 'Anonymous',
         text: payload.text.trim(),
       });
       await msg.save();
 
-      // broadcast to all connected clients
-      io.to('global').emit('new_message', msg); // if you use rooms
-      io.emit('new_message', msg); // and also emit globally to be safe
+      io.to('global').emit('new_message', msg); // room
+      io.emit('new_message', msg);               // global
     } catch (err) {
       console.error('Error saving message:', err);
       socket.emit('error', { message: 'Message save failed' });
@@ -109,6 +115,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// --- Start server ---
 server.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
